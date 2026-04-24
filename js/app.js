@@ -746,7 +746,232 @@ const APP = (() => {
     $("#sources-btn").addEventListener("click", openModal);
     $("#sources-close").addEventListener("click", closeModal);
     modal.querySelector(".modal-backdrop").addEventListener("click", closeModal);
-    document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
+    document.addEventListener("keydown", e => {
+      if (e.key === "Escape") { closeModal(); closeHunter(); }
+    });
+
+    // hunter modal
+    const hmodal = $("#hunter-modal");
+    const openHunter = () => {
+      hmodal.classList.remove("hidden");
+      renderHunter();
+    };
+    const closeHunter = () => hmodal.classList.add("hidden");
+    $("#hunter-btn").addEventListener("click", openHunter);
+    $("#hunter-close").addEventListener("click", closeHunter);
+    hmodal.querySelector(".modal-backdrop").addEventListener("click", closeHunter);
+    $("#hunter-toggle").addEventListener("click", toggleHunter);
+    $("#hunter-clear").addEventListener("click", () => {
+      if (confirm("確定清空所有獵手歷史訊號？(無法復原)")) { Hunter.clearHistory(); renderHunter(); }
+    });
+    $("#hunter-export").addEventListener("click", exportHunterCSV);
+    Hunter.subscribe(() => renderHunter());
+  }
+
+  // --------- hunter ---------
+  async function toggleHunter() {
+    if (Hunter.running) {
+      Hunter.stop();
+    } else {
+      await Hunter.requestNotifyPerm();
+      Hunter.start({ minComposite: 60, freq: 180_000 });
+    }
+    renderHunter();
+  }
+
+  function renderHunter() {
+    if ($("#hunter-modal")?.classList.contains("hidden")) {
+      renderHunterBadge();   // still update badge when modal closed
+      return;
+    }
+    const signals = Hunter.signals;
+    const stats = Hunter.getStats();
+    const open = signals.filter(s => s.status === "open");
+    const closed = signals.filter(s => s.status !== "open");
+
+    // toolbar
+    $("#hunter-toggle").textContent = Hunter.running ? "⏸ 停止獵盤" : "▶ 開始獵盤";
+    $("#hunter-toggle").classList.toggle("on", Hunter.running);
+    const dot = $("#hunter-status-dot");
+    dot.classList.remove("running", "scanning");
+    if (Hunter.scanning) dot.classList.add("scanning");
+    else if (Hunter.running) dot.classList.add("running");
+    $("#hunter-status-text").textContent =
+      Hunter.scanning ? "掃描中…" :
+      Hunter.running  ? (API.isMarketOpen() ? "監控中（盤中）" : "待命中（盤後，只更新結果）") :
+                        "閒置";
+    $("#hunter-universe-n").textContent = Hunter.universe.length || "--";
+    $("#hunter-min-score").textContent = Hunter.config.minComposite;
+    $("#hunter-last-scan").textContent = Hunter.lastScan ?
+      new Date(Hunter.lastScan).toLocaleTimeString("zh-Hant", { hour12: false }) : "--";
+
+    // open signals
+    $("#hunter-open-count").textContent = open.length;
+    const list = $("#hunter-open-list");
+    if (!open.length) {
+      list.innerHTML = `<div class="muted" style="padding:14px">
+        ${Hunter.running ? "監控中，等待訊號…盤中約每 3 分鐘掃描一次。" : "尚無訊號。按「開始獵盤」啟動。"}
+      </div>`;
+    } else {
+      list.innerHTML = open.slice(0, 30).map(renderSigCard).join("");
+      list.querySelectorAll(".hunter-sig-card").forEach((el, i) => {
+        el.addEventListener("click", () => el.classList.toggle("expanded"));
+        const code = el.dataset.code;
+        el.querySelectorAll(".goto").forEach(btn => btn.addEventListener("click", e => {
+          e.stopPropagation();
+          if (!state.watch.find(w => w.code === code)) {
+            state.watch.push({ code, name: open[i].name || code });
+            saveLocal("watch", state.watch);
+            renderWatchShell();
+          }
+          selectStock(code);
+          $("#hunter-modal").classList.add("hidden");
+        }));
+      });
+    }
+
+    // stats panel
+    renderStatsPanel(stats);
+
+    // history table
+    renderHunterHistory(closed);
+    $("#hunter-history-count").textContent = closed.length;
+
+    // badge
+    renderHunterBadge();
+  }
+
+  function renderSigCard(s) {
+    const now = s.lastPrice ?? s.entry;
+    const pnl = ((now - s.entry) / s.entry) * 100;
+    const cls = pnl > 0 ? "up" : pnl < 0 ? "dn" : "flat";
+    // progress visualization: stop(-100%)---entry(0)---target(+100%)
+    const range = Math.max(s.target - s.entry, s.entry - s.stopLoss, 0.001);
+    let offset;
+    if (now >= s.entry) offset = Math.min(50 + (now - s.entry) / (s.target - s.entry) * 50, 100);
+    else offset = Math.max(50 - (s.entry - now) / (s.entry - s.stopLoss) * 50, 0);
+    const barColor = pnl > 0 ? "var(--up)" : "var(--dn)";
+    const barW = Math.abs(offset - 50);
+    const barL = Math.min(offset, 50);
+    return `
+      <div class="hunter-sig-card" data-code="${esc(s.code)}">
+        <div class="sig-top">
+          <div>
+            <span class="sig-code">${esc(s.code)}</span>
+            <span class="sig-name">${esc(s.name || "")}</span>
+            <span class="sig-trigger">${esc(s.trigger)}</span>
+          </div>
+          <div class="sig-score">${s.composite}</div>
+        </div>
+        <div class="sig-grid">
+          <div><span>進場</span><b>${s.entry.toFixed(2)}</b></div>
+          <div><span>停損</span><b class="dn">${s.stopLoss.toFixed(2)}</b></div>
+          <div><span>目標</span><b class="up">${s.target.toFixed(2)}</b></div>
+          <div><span>R:R</span><b>${s.rr.toFixed(2)}</b></div>
+          <div><span>現價</span><b class="${cls}">${now.toFixed(2)}</b></div>
+          <div><span>P&L</span><b class="${cls}">${pnl>0?"+":""}${pnl.toFixed(2)}%</b></div>
+          <div><span>觸發</span><b>${new Date(s.firedAt).toLocaleTimeString("zh-Hant",{hour12:false,hour:"2-digit",minute:"2-digit"})}</b></div>
+          <div><span>評級</span><b>${esc(s.verdict)}</b></div>
+        </div>
+        <div class="sig-progress">
+          <div class="fill" style="left:${barL}%;width:${barW}%;background:${barColor}"></div>
+        </div>
+        <div class="sig-sources">
+          <div style="color:var(--muted);margin-bottom:4px">資料來源（每筆訊號可溯源）：</div>
+          ${s.sources.filter(src => src.url).map(src =>
+            `<a href="${esc(src.url)}" target="_blank" rel="noopener">${esc(src.label)} →</a>`
+          ).join("")}
+          <div style="color:var(--muted);margin-top:4px">MIS 快照時間: ${esc(s.sources.find(x=>x.type==="snapshot-time")?.ts||"-")}</div>
+          <div style="margin-top:6px;font-size:11px">
+            所有訊號: ${s.allSignals.map(m => `<span style="background:rgba(76,201,240,.1);padding:1px 6px;border-radius:4px;margin-right:3px">${esc(m)}</span>`).join("")}
+          </div>
+          <div style="margin-top:6px"><button class="btn-sm goto">開啟主圖分析 →</button></div>
+        </div>
+      </div>`;
+  }
+
+  function renderStatsPanel(stats) {
+    const box = $("#hunter-stats-grid");
+    const lbl = $("#hunter-sample-label");
+    lbl.textContent = `${stats.decisive} 筆決勝 · ${stats.confidence}`;
+
+    const wr = stats.winRate != null ? (stats.winRate*100).toFixed(1) + "%" : "—";
+    const ar = stats.avgReturnClosed != null ? (stats.avgReturnClosed*100).toFixed(2)+"%" : "—";
+    const ex = stats.expectancy != null ? (stats.expectancy*100).toFixed(2)+"%" : "—";
+    const aw = stats.avgWin != null ? "+"+(stats.avgWin*100).toFixed(2)+"%" : "—";
+    const al = stats.avgLoss != null ? (stats.avgLoss*100).toFixed(2)+"%" : "—";
+
+    box.innerHTML = `
+      <div class="stat big"><div class="label">總勝率</div><div class="value">${wr}</div>
+        <div class="sub">目標達成 / (目標+停損)</div></div>
+      <div class="stat"><div class="label">累計訊號</div><div class="value">${stats.total}</div></div>
+      <div class="stat"><div class="label">進行中</div><div class="value">${stats.open}</div></div>
+      <div class="stat"><div class="label">碰到目標</div><div class="value up">${stats.wins}</div></div>
+      <div class="stat"><div class="label">碰到停損</div><div class="value dn">${stats.stops}</div></div>
+      <div class="stat"><div class="label">平均獲利</div><div class="value up">${aw}</div></div>
+      <div class="stat"><div class="label">平均虧損</div><div class="value dn">${al}</div></div>
+      <div class="stat big"><div class="label">期望值（每筆預期報酬）</div><div class="value">${ex}</div>
+        <div class="sub">${stats.decisive < 30 ? "⚠ 樣本 < 30 筆，此數字尚不可信賴" : "樣本夠，可作為決策參考"}</div></div>
+    `;
+  }
+
+  function renderHunterHistory(closed) {
+    const body = $("#hunter-history-body");
+    const rows = closed.slice(0, 30);
+    if (!rows.length) {
+      body.innerHTML = `<tr><td colspan="11" class="muted" style="padding:14px;text-align:center">尚無結束訊號</td></tr>`;
+      return;
+    }
+    const stMap = { win:"碰目標 ✓", stop:"碰停損 ✗", expired:"逾期 ○" };
+    body.innerHTML = rows.map(s => {
+      const pnl = (s.outcomePct || 0) * 100;
+      const cls = pnl > 0 ? "up" : pnl < 0 ? "dn" : "";
+      return `<tr>
+        <td>${new Date(s.firedAt).toLocaleDateString("zh-Hant",{month:"2-digit",day:"2-digit"})} ${new Date(s.firedAt).toLocaleTimeString("zh-Hant",{hour12:false,hour:"2-digit",minute:"2-digit"})}</td>
+        <td>${esc(s.code)}</td>
+        <td>${esc(s.name||"")}</td>
+        <td>${esc(s.trigger)}</td>
+        <td>${s.entry.toFixed(2)}</td>
+        <td>${s.stopLoss.toFixed(2)}</td>
+        <td>${s.target.toFixed(2)}</td>
+        <td>${s.rr.toFixed(2)}</td>
+        <td>${s.composite}</td>
+        <td class="status-${s.status}">${stMap[s.status] || s.status}</td>
+        <td class="${cls}">${pnl>0?"+":""}${pnl.toFixed(2)}%</td>
+      </tr>`;
+    }).join("");
+  }
+
+  function renderHunterBadge() {
+    const open = Hunter.signals.filter(s => s.status === "open").length;
+    const badge = $("#hunter-badge");
+    if (open > 0) {
+      badge.textContent = open;
+      badge.classList.remove("hidden");
+    } else {
+      badge.classList.add("hidden");
+    }
+  }
+
+  function exportHunterCSV() {
+    const rows = [
+      ["firedAt","code","name","trigger","entry","stopLoss","target","rr","composite","verdict","status","outcomePct","lastPrice","closedAt"]
+    ];
+    Hunter.signals.forEach(s => rows.push([
+      new Date(s.firedAt).toISOString(),
+      s.code, s.name, s.trigger, s.entry, s.stopLoss, s.target, s.rr, s.composite, s.verdict,
+      s.status, s.outcomePct ?? "", s.lastPrice ?? "", s.closedAt ? new Date(s.closedAt).toISOString() : ""
+    ]));
+    const csv = rows.map(r => r.map(v => {
+      const s = String(v ?? "");
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s;
+    }).join(",")).join("\n");
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `liumai-hunter-${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
   }
 
   // --------- boot ---------

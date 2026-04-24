@@ -24,6 +24,7 @@
   </div>
 
   <div class="status">
+    <span class="pill hunter-btn" id="hunter-btn" title="自動獵手 · 懶人買股">🎯 獵手 <span id="hunter-badge" class="hunter-badge hidden">0</span></span>
     <span class="pill" id="sources-btn" title="資料源 &amp; 更新頻率">ⓘ 資料源</span>
     <span class="pill" id="market-status">盤前</span>
     <span class="clock" id="clock">--:--:--</span>
@@ -277,10 +278,111 @@
   </div>
 </div>
 
+<!-- ========== HUNTER MODAL ========== -->
+<div id="hunter-modal" class="modal hidden">
+  <div class="modal-backdrop"></div>
+  <div class="modal-card hunter-card">
+    <div class="modal-head">
+      <h3>🎯 自動獵手 · AUTO HUNTER · 懶人買股決策台</h3>
+      <button class="modal-close" id="hunter-close">✕</button>
+    </div>
+    <div class="hunter-body">
+
+      <!-- toolbar -->
+      <div class="hunter-toolbar">
+        <button id="hunter-toggle" class="btn-hunter">▶ 開始獵盤</button>
+        <span class="hunter-status">
+          <span class="dot" id="hunter-status-dot"></span>
+          <span id="hunter-status-text">閒置</span>
+        </span>
+        <span class="muted">
+          宇宙：<b id="hunter-universe-n">--</b> 支 ·
+          門檻分 <b id="hunter-min-score">60</b> ·
+          頻率 3 分鐘
+        </span>
+        <span class="muted" style="margin-left:auto">
+          上次掃描 <b id="hunter-last-scan">--</b>
+        </span>
+      </div>
+
+      <!-- caveat banner -->
+      <div class="hunter-caveat">
+        ⚠️ <b>重要免責</b>：這是研究工具而非投資建議。
+        技術訊號歷史勝率約 45–55%，加上 20 秒報價延遲與滑價，實戰可能更低。
+        請當成「篩選器」而非「跟單系統」。買賣請自行判斷，盈虧自負。
+        <br>⚙️ 本版為客戶端掃描 — <b>只在你這個分頁開著時運作</b>，關掉就停。
+        （v2 預計上線 Cloudflare Cron 做 24/7 真・背景掃描）
+      </div>
+
+      <div class="hunter-grid">
+
+        <!-- active signals -->
+        <section class="hunter-section hunter-active">
+          <div class="hunter-section-head">
+            <h4>🟢 進行中訊號</h4>
+            <span class="count" id="hunter-open-count">0</span>
+          </div>
+          <div class="hunter-signal-list" id="hunter-open-list">
+            <div class="muted" style="padding:14px">尚無訊號。按「開始獵盤」並等待盤中掃描。</div>
+          </div>
+        </section>
+
+        <!-- stats panel -->
+        <section class="hunter-section hunter-stats">
+          <div class="hunter-section-head">
+            <h4>📊 準確率統計</h4>
+            <span class="muted" id="hunter-sample-label">—</span>
+          </div>
+          <div class="hunter-stats-grid" id="hunter-stats-grid"></div>
+          <div class="hunter-notes">
+            <div>• 勝率 = 碰目標 / (碰目標 + 碰停損)</div>
+            <div>• 期望值 = 勝率×平均獲利 + 敗率×平均虧損（每筆交易預期報酬）</div>
+            <div>• 逾 7 天未觸發任何線 → 標記 expired（不計入勝率）</div>
+          </div>
+          <div style="margin-top:10px;display:flex;gap:8px">
+            <button id="hunter-export" class="btn-ghost">匯出 CSV</button>
+            <button id="hunter-clear" class="btn-ghost" style="color:var(--up);border-color:rgba(255,90,106,.3)">清空歷史</button>
+          </div>
+        </section>
+      </div>
+
+      <!-- history -->
+      <section class="hunter-section">
+        <div class="hunter-section-head">
+          <h4>📜 歷史訊號（最近 30 筆）</h4>
+          <span class="muted" id="hunter-history-count">0</span>
+        </div>
+        <div class="hunter-history-wrap">
+          <table class="hunter-history-table">
+            <thead>
+              <tr>
+                <th>時間</th>
+                <th>代號</th>
+                <th>名稱</th>
+                <th>訊號</th>
+                <th>進場</th>
+                <th>停損</th>
+                <th>目標</th>
+                <th>R:R</th>
+                <th>AI分</th>
+                <th>結果</th>
+                <th>報酬</th>
+              </tr>
+            </thead>
+            <tbody id="hunter-history-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</div>
+
 <script src="js/indicators.js"></script>
 <script src="js/api.js"></script>
 <script src="js/chart.js"></script>
 <script src="js/ai.js"></script>
+<script src="js/hunter.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>
