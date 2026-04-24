@@ -1,0 +1,25 @@
+# runtime
+.server.pid
+stk.log
+*.log
+
+# reference screenshots (not needed in repo)
+S__*.jpg
+S__*.png
+
+# os
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# editor
+.vscode/
+.idea/
+*.swp
+
+# Cloudflare wrangler cache
+.wrangler/
+.dev.vars
+
+# node
+node_modules/

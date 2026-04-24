@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>六脈 LIUMAI · 台股 AI 戰情艙</title>
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<!-- ============ TOP BAR ============ -->
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">六<span class="logo-dot"></span></span>
+    <div class="brand-text">
+      <div class="brand-title">六脈 <span class="brand-accent">LIUMAI</span> · 台股 AI 戰情艙</div>
+      <div class="brand-sub">六識盤面 · 一劍斷勢 · Taiwan Stock AI Intelligence</div>
+    </div>
+  </div>
+
+  <div class="indices" id="indices">
+    <!-- filled by JS: 加權指數 / 櫃買指數 / 電子 / 金融 / 台指期 -->
+    <div class="idx-skel">載入指數…</div>
+  </div>
+
+  <div class="status">
+    <span class="pill" id="sources-btn" title="資料源 &amp; 更新頻率">ⓘ 資料源</span>
+    <span class="pill" id="market-status">盤前</span>
+    <span class="clock" id="clock">--:--:--</span>
+    <span class="pill refresh" id="auto-refresh" title="自動更新">● AUTO 5s</span>
+  </div>
+</header>
+
+<!-- ============ MAIN GRID ============ -->
+<main class="layout">
+
+  <!-- ---------- LEFT: WATCHLIST ---------- -->
+  <aside class="col-left">
+    <div class="card watchlist">
+      <div class="card-head">
+        <h3>自選 / 市場行情</h3>
+        <div class="card-actions">
+          <input id="watch-add" class="inp-sm" placeholder="加入代號 例 2330" maxlength="6" />
+          <button id="watch-add-btn" class="btn-sm">+</button>
+        </div>
+      </div>
+      <div class="watchlist-body" id="watchlist"></div>
+    </div>
+
+    <div class="card scanner">
+      <div class="card-head">
+        <h3>全市場掃描</h3>
+        <button id="scan-btn" class="btn-ghost">▶ 執行</button>
+      </div>
+      <div class="scanner-opts">
+        <label><input type="checkbox" id="scan-rs" checked> 相對強勢</label>
+        <label><input type="checkbox" id="scan-volspike" checked> 爆量</label>
+        <label><input type="checkbox" id="scan-break" checked> 突破</label>
+        <label><input type="checkbox" id="scan-foreign" checked> 外資連買</label>
+      </div>
+      <div class="scanner-result" id="scanner-result">
+        <div class="muted">點擊「執行」以掃描符合條件之個股</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ---------- CENTER: SELECTED STOCK ---------- -->
+  <section class="col-center">
+    <div class="card stock-hero" id="hero">
+      <div class="hero-left">
+        <div class="hero-id">
+          <span id="h-code">2330</span>
+          <span id="h-name">台積電</span>
+          <span id="h-market" class="tag">TSE · 半導體</span>
+        </div>
+        <div class="hero-price">
+          <span id="h-price">--</span>
+          <span id="h-chg" class="chg">--</span>
+          <span id="h-chgp" class="chg">--</span>
+        </div>
+        <div class="hero-meta">
+          <div><span>開</span><b id="h-open">--</b></div>
+          <div><span>高</span><b id="h-high">--</b></div>
+          <div><span>低</span><b id="h-low">--</b></div>
+          <div><span>昨收</span><b id="h-ref">--</b></div>
+          <div><span>成交量</span><b id="h-vol">--</b></div>
+          <div><span>成交值</span><b id="h-amt">--</b></div>
+          <div><span>漲停</span><b id="h-uplimit" class="up">--</b></div>
+          <div><span>跌停</span><b id="h-dnlimit" class="dn">--</b></div>
+        </div>
+      </div>
+      <div class="hero-right">
+        <div class="mini-gauge">
+          <div class="gauge-label">六脈綜合評分</div>
+          <div class="gauge-number" id="ai-score">--</div>
+          <div class="gauge-bar"><div class="gauge-fill" id="ai-score-bar"></div></div>
+          <div class="gauge-verdict" id="ai-verdict">--</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card chart-card">
+      <div class="chart-toolbar">
+        <div class="seg" id="tf-seg">
+          <button data-tf="1d" class="on">日K</button>
+          <button data-tf="1w">週K</button>
+          <button data-tf="1mo">月K</button>
+          <button data-tf="60d">近60日走勢</button>
+        </div>
+        <div class="seg" id="ind-seg">
+          <button data-ind="MA" class="on">MA</button>
+          <button data-ind="BB" class="on">布林</button>
+          <button data-ind="VOL" class="on">量</button>
+          <button data-ind="RSI">RSI</button>
+          <button data-ind="MACD">MACD</button>
+          <button data-ind="KD">KD</button>
+        </div>
+        <div class="chart-meta" id="chart-meta">
+          <span>開 <b id="k-o">--</b></span>
+          <span>高 <b id="k-h">--</b></span>
+          <span>低 <b id="k-l">--</b></span>
+          <span>收 <b id="k-c">--</b></span>
+          <span>量 <b id="k-v">--</b></span>
+        </div>
+      </div>
+      <canvas id="chart" width="900" height="420"></canvas>
+      <canvas id="chart-sub" width="900" height="120"></canvas>
+    </div>
+
+    <div class="row-3">
+      <div class="card book-card">
+        <h3>五檔 / 內外盤</h3>
+        <div class="book" id="book"></div>
+      </div>
+      <div class="card ticks-card">
+        <h3>即時成交明細</h3>
+        <div class="ticks-head"><span>時間</span><span>價位</span><span>量</span><span>漲跌</span></div>
+        <div class="ticks" id="ticks"></div>
+      </div>
+      <div class="card fund-card">
+        <h3>三大法人 · 籌碼</h3>
+        <div class="fund" id="fund"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ---------- RIGHT: AI + SIGNALS ---------- -->
+  <aside class="col-right">
+    <div class="card ai-card">
+      <div class="card-head">
+        <h3>六脈 AI 六維評分</h3>
+        <span class="ai-dot">● 即時</span>
+      </div>
+      <div class="ai-dims" id="ai-dims"></div>
+    </div>
+
+    <div class="card signal-card">
+      <div class="card-head">
+        <h3>六脈操作訊號</h3>
+        <span class="muted">自動滾動</span>
+      </div>
+      <div class="signals" id="signals"></div>
+    </div>
+
+    <div class="card news-card">
+      <div class="card-head">
+        <h3>相關新聞</h3>
+        <button id="news-refresh" class="btn-ghost">重新整理</button>
+      </div>
+      <div class="news" id="news"></div>
+    </div>
+  </aside>
+</main>
+
+<!-- ============ BOTTOM: TOP MOVERS + 大盤 ============ -->
+<section class="bottom-grid">
+  <div class="card">
+    <div class="card-head"><h3>漲幅排行</h3><span class="muted">TSE</span></div>
+    <div class="movers" id="gainers">載入中…</div>
+  </div>
+  <div class="card">
+    <div class="card-head"><h3>跌幅排行</h3><span class="muted">TSE</span></div>
+    <div class="movers" id="losers">載入中…</div>
+  </div>
+  <div class="card">
+    <div class="card-head"><h3>成交值排行</h3><span class="muted">TSE</span></div>
+    <div class="movers" id="value">載入中…</div>
+  </div>
+  <div class="card">
+    <div class="card-head"><h3>類股強弱</h3><span class="muted">當日</span></div>
+    <div class="sectors" id="sectors">載入中…</div>
+  </div>
+</section>
+
+<footer class="foot">
+  <span>資料來源：TWSE / TPEx / FinMind · 僅供參考，不構成投資建議</span>
+  <span id="last-update">—</span>
+</footer>
+
+<div id="toast" class="toast hidden"></div>
+
+<!-- ========== SOURCES MODAL ========== -->
+<div id="sources-modal" class="modal hidden">
+  <div class="modal-backdrop"></div>
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3>📊 資料源 · 更新頻率</h3>
+      <button class="modal-close" id="sources-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="src-group">
+        <div class="src-group-head">⚡ 即時（盤中自動刷新）</div>
+        <table class="src-table">
+          <thead><tr><th>資料</th><th>頻率</th><th>來源</th><th>延遲</th></tr></thead>
+          <tbody>
+            <tr><td>個股報價 / 自選股價</td><td class="t">5 秒</td><td><a href="https://mis.twse.com.tw" target="_blank" rel="noopener">TWSE MIS</a></td><td>~20s</td></tr>
+            <tr><td>五檔 / 成交明細 / 內外盤</td><td class="t">5 秒</td><td><a href="https://mis.twse.com.tw" target="_blank" rel="noopener">TWSE MIS</a></td><td>~20s</td></tr>
+            <tr><td>加權 / 櫃買指數</td><td class="t">15 秒</td><td><a href="https://mis.twse.com.tw" target="_blank" rel="noopener">TWSE MIS</a></td><td>~20s</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="src-group">
+        <div class="src-group-head">📈 半即時（週期刷新）</div>
+        <table class="src-table">
+          <thead><tr><th>資料</th><th>頻率</th><th>來源</th><th>延遲</th></tr></thead>
+          <tbody>
+            <tr><td>漲/跌/成交值排行</td><td class="t">2 分鐘</td><td><a href="https://openapi.twse.com.tw/#/%E4%B8%8A%E5%B8%82%E5%85%AC%E5%8F%B8/get_exchangeReport_STOCK_DAY_ALL" target="_blank" rel="noopener">TWSE OpenAPI · STOCK_DAY_ALL</a></td><td>T+0 盤後</td></tr>
+            <tr><td>類股強弱</td><td class="t">2 分鐘</td><td><a href="https://openapi.twse.com.tw/" target="_blank" rel="noopener">TWSE OpenAPI · MI_INDEX</a></td><td>T+0 盤後</td></tr>
+            <tr><td>相關新聞</td><td class="t">5 分鐘</td><td><a href="https://news.google.com/" target="_blank" rel="noopener">Google News RSS</a></td><td>15-30 分</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="src-group">
+        <div class="src-group-head">📚 歷史（切換個股載入）</div>
+        <table class="src-table">
+          <thead><tr><th>資料</th><th>觸發</th><th>來源</th><th>延遲</th></tr></thead>
+          <tbody>
+            <tr><td>日K 歷史（~400 日）</td><td class="t">切股時</td><td><a href="https://finmind.github.io/tutor/TaiwanMarket/Technical/" target="_blank" rel="noopener">FinMind · TaiwanStockPrice</a></td><td>T+1</td></tr>
+            <tr><td>週K / 月K</td><td class="t">切股時</td><td>由日K本地合成</td><td>T+1</td></tr>
+            <tr><td>三大法人買賣超（近 N 日）</td><td class="t">切股時</td><td><a href="https://finmind.github.io/tutor/TaiwanMarket/InstitutionalInvestors/" target="_blank" rel="noopener">FinMind · InstitutionalInvestorsBuySell</a></td><td>T+1</td></tr>
+            <tr><td>PE / PB / 殖利率</td><td class="t">（尚未主動顯示）</td><td><a href="https://openapi.twse.com.tw/" target="_blank" rel="noopener">TWSE OpenAPI · BWIBBU_ALL</a></td><td>T+0 盤後</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="src-group">
+        <div class="src-group-head">🧠 六脈 AI 引擎</div>
+        <p class="src-note">
+          六脈評分（趨勢/動能/量能/籌碼/波動/位階）與操作訊號為本地啟發式計算，
+          基於上述資料在瀏覽器端即時生成。不透過任何第三方 AI，也不送出你的資料到任何伺服器。
+        </p>
+      </div>
+
+      <div class="src-group">
+        <div class="src-group-head">⚠️ 重要提醒</div>
+        <ul class="src-bullets">
+          <li><b>免費即時資料皆有 ~20 秒延遲</b> — 券商 Level 1/2 流 (0 秒) 要另外付費</li>
+          <li><b>三大法人是 T+1</b>：現在看到的是昨天 (2026-04-23) 資料；今日的 ~16:00 後才公告</li>
+          <li><b>歷史 K 線 T+1</b>：盤中最後一根 K 棒要等盤後才入庫</li>
+          <li><b>盤後 / 排行資料約 15:30 更新</b>（證交所收盤後發布）</li>
+          <li><b>新聞</b>經過 Google News 聚合，時間戳與原始發布會有落差</li>
+          <li>本工具僅供研究參考，不構成投資建議</li>
+        </ul>
+      </div>
+
+      <div class="src-group">
+        <div class="src-group-head">🔧 CORS 代理架構</div>
+        <p class="src-note">
+          TWSE MIS 不支援瀏覽器跨域，所以由本機的 <code>server.py</code>（Python 標準庫，Port 8787）
+          做白名單代理 — 只會代理到 TWSE / TPEx / FinMind / Google News 這些公開資料站。
+          沒有任何第三方追蹤、沒有帳號、沒有交易 API Key。
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="js/indicators.js"></script>
+<script src="js/api.js"></script>
+<script src="js/chart.js"></script>
+<script src="js/ai.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
