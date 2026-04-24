@@ -17,3 +17,5 @@ S__*.jpg
 S__*.png
 node_modules/
 .wrangler/
+SETUP-D1.md
+schema.sql

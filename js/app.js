@@ -796,14 +796,33 @@ const APP = (() => {
     dot.classList.remove("running", "scanning");
     if (Hunter.scanning) dot.classList.add("scanning");
     else if (Hunter.running) dot.classList.add("running");
+
+    const modeLabel =
+      Hunter.mode === "cloud" ? "🌐 雲端同步（全球共享，每 5 分鐘掃描）" :
+      Hunter.mode === "local" ? "💾 本機模式（僅此瀏覽器，關掉即停）" :
+      "";
+
     $("#hunter-status-text").textContent =
       Hunter.scanning ? "掃描中…" :
-      Hunter.running  ? (API.isMarketOpen() ? "監控中（盤中）" : "待命中（盤後，只更新結果）") :
+      Hunter.running  ? (Hunter.mode === "cloud" ? "伺服器端運行中（24/7）" :
+                         (API.isMarketOpen() ? "監控中（盤中）" : "待命中（盤後）")) :
                         "閒置";
-    $("#hunter-universe-n").textContent = Hunter.universe.length || "--";
+    $("#hunter-universe-n").textContent =
+      Hunter.mode === "cloud" ? "server" : (Hunter.universe.length || "--");
     $("#hunter-min-score").textContent = Hunter.config.minComposite;
     $("#hunter-last-scan").textContent = Hunter.lastScan ?
       new Date(Hunter.lastScan).toLocaleTimeString("zh-Hant", { hour12: false }) : "--";
+
+    // update mode badge on caveat
+    const caveat = document.querySelector(".hunter-caveat");
+    if (caveat && !caveat.querySelector(".mode-badge")) {
+      const badge = document.createElement("div");
+      badge.className = "mode-badge";
+      badge.style.cssText = "margin-top:6px;font-size:11px;color:var(--accent);font-weight:700";
+      caveat.appendChild(badge);
+    }
+    const badge = caveat?.querySelector(".mode-badge");
+    if (badge) badge.textContent = "運行模式： " + modeLabel;
 
     // open signals
     $("#hunter-open-count").textContent = open.length;

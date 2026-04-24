@@ -10,5 +10,23 @@
   },
   "observability": {
     "enabled": true
+  },
+
+  // ─── D1 SQLite database for Hunter signal history ───
+  // 使用者需要在 Cloudflare Dashboard 建立 D1 資料庫並把 database_id 填到下面。
+  // 未設定前仍可運作 — /api/hunter/* 會回 503，客戶端改用 localStorage 模式。
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "liumai-hunter",
+      "database_id": "PLACEHOLDER_FILL_FROM_DASHBOARD"
+    }
+  ],
+
+  // ─── Cron Trigger: 每 5 分鐘觸發 scheduled() ───
+  // 盤中 (09:00-13:30 TW) 執行全市場掃描 + 更新所有 open 訊號的現價
+  // 盤後只更新 outcome（因為 MIS 沒有新資料）
+  "triggers": {
+    "crons": ["*/5 * * * *"]
   }
 }

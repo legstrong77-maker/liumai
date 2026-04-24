@@ -1,11 +1,14 @@
-// 六脈 LIUMAI · Cloudflare Worker (with Static Assets)
+// 六脈 LIUMAI · Cloudflare Worker (with Static Assets + D1 Hunter)
 // ----------------------------------------------------
-// Handles /health, /proxy, /quote as API routes and
-// falls through to static assets (index.html, css, js)
-// for everything else.
+// Handles:
+//   /health /proxy /quote    — always available
+//   /api/hunter/*            — requires env.DB (D1) binding
+//   <anything else>          — static assets (index.html, css, js)
 //
-// Runs identically to server.py (local) and to the
-// /functions/*.js Pages Functions version.
+// Scheduled handler runs every 5 minutes via Cron Trigger:
+//   - updateOutcomes() always
+//   - scanMarket() only when TW market is open (09:00-13:30 TW time)
+import { scanMarket, updateOutcomes, handleHunterAPI } from "./hunter-server.js";
 
 const ALLOWED_HOSTS = new Set([
   "mis.twse.com.tw",
@@ -116,6 +119,14 @@ async function handleQuote(request) {
   }
 }
 
+function isMarketOpenTW() {
+  const now = new Date(Date.now() + 8 * 3600_000);
+  const day = now.getUTCDay();
+  if (day === 0 || day === 6) return false;
+  const hm = now.getUTCHours() * 60 + now.getUTCMinutes();
+  return hm >= 9 * 60 && hm <= 13 * 60 + 30;
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -128,8 +139,30 @@ export default {
     if (url.pathname === "/health") return handleHealth();
     if (url.pathname === "/proxy")  return handleProxy(request);
     if (url.pathname === "/quote")  return handleQuote(request);
+    if (url.pathname.startsWith("/api/hunter")) {
+      return handleHunterAPI(request, env, url);
+    }
 
     // Everything else → static assets (index.html, css/, js/)
     return env.ASSETS.fetch(request);
+  },
+
+  // Cron Trigger handler — runs every 5 minutes (configured in wrangler.jsonc).
+  // Always refresh outcomes; only do a fresh scan during market hours.
+  async scheduled(event, env, ctx) {
+    if (!env.DB) {
+      console.warn("scheduled: DB binding missing, skipping Hunter cron");
+      return;
+    }
+    ctx.waitUntil((async () => {
+      try {
+        await updateOutcomes(env);
+      } catch (e) { console.error("updateOutcomes failed:", e); }
+      if (isMarketOpenTW()) {
+        try {
+          await scanMarket(env);
+        } catch (e) { console.error("scanMarket failed:", e); }
+      }
+    })());
   },
 };
