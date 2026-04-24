@@ -1,0 +1,19 @@
+# Files in the repo that should NOT be uploaded as static assets
+# (they're either backend code, local tools, or meta files).
+src/**
+functions/**
+server.py
+啟動.bat
+README.md
+.gitignore
+.assetsignore
+wrangler.jsonc
+wrangler.toml
+*.py
+*.bat
+*.log
+.server.pid
+S__*.jpg
+S__*.png
+node_modules/
+.wrangler/
